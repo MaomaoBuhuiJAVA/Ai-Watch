@@ -2,12 +2,9 @@
 #include "esp_log.h"
 #include "iic.h"
 #include "xl9555.h"
-#include "spi.h"
-#include "board_lcd.h"
-#include "touch.h"
 #include "app_wifi.h"
 #include "app_audio_codec.h"
-#include "app_ui_lvgl.h"
+#include "app_console.h"
 
 static const char *TAG = "main";
 
@@ -20,24 +17,23 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    /* I2C0: XL9555；I2C1: ES8311 — 无屏、无 SPI/LCD/触摸 */
     ESP_ERROR_CHECK(myiic_init());
     ESP_ERROR_CHECK(myiic_init1());
     ESP_ERROR_CHECK(xl9555_init());
-    spi2_init();
-    lcd_init();
-    ESP_ERROR_CHECK(tp_dev.init());
 
-    lcd_clear(0xFFE0);
-    ESP_LOGI(TAG, "connecting WiFi…");
+    ESP_LOGI(TAG, "WiFi connecting…");
     ESP_ERROR_CHECK(app_wifi_init_sta());
-    if (app_wifi_wait_connected(45000) != ESP_OK) {
-        ESP_LOGE(TAG, "WiFi failed, UI will still start");
+    if (app_wifi_wait_connected(60000) != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi failed — fix SSID/password in menuconfig, then reset");
+    } else {
+        ESP_LOGI(TAG, "WiFi OK, IP: %s", app_wifi_ip_str());
     }
 
     app_audio_init();
-    app_ui_lvgl_start();
+    app_console_start();
 
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

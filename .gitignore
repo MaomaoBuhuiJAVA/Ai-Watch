@@ -16,6 +16,7 @@ server/data/wav/
 # IDE / OS
 .idea/
 .vscode/
+firmware/.clangd
 *.swp
 .DS_Store
 Thumbs.db

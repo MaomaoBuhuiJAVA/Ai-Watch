@@ -1,58 +1,71 @@
-# Ai Watch — ESP32-S3 智能手表/助手（固件 + 本地服务端）
+# Ai Watch — ESP32-S3 固件 + 本地服务端
 
-面向幻尔 ESP32-S3 V1.1 开发板：**板载 ES8311 麦克风与扬声器**、触摸屏、按键、WiFi；对话与推理通过 **DeepSeek API**（密钥放在服务端环境变量）。
+面向幻尔 ESP32-S3 V1.1：**当前固件为「无屏基础版」**——USB 串口人机对话 + **KEY1** 一键录音上传；**板载 ES8311** 麦/喇叭；对话走本机 **FastAPI** 再调 **DeepSeek**（密钥只在 `server/.env`）。
 
-## 目录结构
+## 架构（当前）
+
+```
+┌─────────────────┐     WiFi HTTP      ┌──────────────────┐     HTTPS      ┌──────────┐
+│  ESP32-S3       │ ─────────────────► │  PC: FastAPI     │ ─────────────► │ DeepSeek │
+│  串口: 输入问题  │   /api/chat        │  /api/chat       │                │          │
+│  KEY1: 录音开关 │   /api/recordings  │  SQLite + WAV    │                └──────────┘
+└─────────────────┘                    └──────────────────┘
+```
+
+- **设备**：`app_wifi` → `app_http`；`app_console` 用 **`fgets(stdin)`**（USB 串口）发 `/api/chat`；`app_audio_codec` 用 ES8311 录音，停止后按 NVS 隐私标志上传 WAV。
+- **服务端**：`server/app/main.py`（已有 `/api/chat`、`/api/recordings/upload` 等）。
+
+后续要加 **LCD + LVGL**，可单独恢复组件与 `app_ui_lvgl`（会明显增加编译与链接时间）。
+
+## 目录
 
 ```
 Ai Watch/
-  docs/WIRING.md          # 接线说明（与官方例程管脚一致）
-  firmware/               # ESP-IDF 工程（idf.py build / flash）
-  server/                 # 本地 FastAPI 服务（DeepSeek、日程、录音元数据）
+  docs/WIRING.md
+  firmware/          # ESP-IDF，无 LVGL
+  server/
 ```
 
-## 固件（ESP-IDF）
+## 固件编译与烧录
 
-1. 安装 [ESP-IDF 5.x](https://docs.espressif.com/projects/esp-idf/) 并配置环境。
-2. 接线见 `docs/WIRING.md`（默认仅用板载音频）；在 `firmware` 目录执行：
+1. 打开 **ESP-IDF 5.5.4** 终端，`cd firmware` 后执行 **`. .\export_build_env.ps1`**（中文 Windows 避免 kconfig 编码问题）。
+2. **去掉旧 LVGL 残留**（若曾编过旧工程）：删除目录 **`firmware/managed_components/lvgl__lvgl`**（若存在），然后：
 
-```bash
-cd firmware
+```powershell
+idf.py fullclean
 idf.py set-target esp32s3
 idf.py menuconfig
 ```
 
-在 **Ai Watch** 菜单中设置：WiFi SSID/密码、本地服务器 URL（默认 `http://192.168.1.100:8765`）。
+在 **Ai Watch** 中设置 WiFi、`AIW_SERVER_BASE_URL`（电脑 IP:8765）。
 
-```bash
+```powershell
 idf.py build flash monitor
 ```
 
-首次编译会从组件仓库拉取 **LVGL**、**esp_codec_dev**、**es8311**。
+3. 串口里会出现 `=== Ai Watch (no screen) ===`，输入一行回车即发起对话；**KEY1** 切换录音。
 
-## 服务端（本机）
+## 服务端
 
-```bash
+```powershell
 cd server
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
+# 填入 DEEPSEEK_API_KEY
 uvicorn app.main:app --host 0.0.0.0 --port 8765
 ```
 
-设备与电脑需在同一局域网；防火墙放行 8765。
+电脑与开发板同一局域网；防火墙放行 **8765**。
 
-## 功能与后续扩展（当前框架）
+## 功能表（无屏版）
 
-| 模块 | 状态 |
+| 模块 | 说明 |
 |------|------|
-| UI（LVGL） | 首页 / 录音 / 日程 / 复盘 / 设置（含隐私开关） |
-| WiFi + HTTP JSON | 已实现 |
-| 板载 ES8311 录音 + 上传 WAV | 已实现（按键启停，长度上限见 `board_config.h`） |
-| 板载扬声器播放 | Codec 已初始化，可在同一路径增加 `esp_codec_dev_write` 做 TTS/回放 |
-| 唤醒词 | 占位：按键 + 可选能量门限扩展 |
-| 日程/提醒/检索 | 服务端 API + SQLite；设备端列表展示与占位请求 |
+| 串口对话 | 每行文本 → `POST /api/chat` → 打印回复 |
+| KEY1 | 启停录音；停止后上传 WAV（未开隐私时） |
+| ES8311 | 板载麦/喇叭；XL9555 开 MUTE |
+| 日程/转写等 | 仍在服务端 API，设备端后续再接 |
 
-将 DeepSeek Key 只放在 `server/.env`，**不要**写入固件。
+将 DeepSeek Key **只**放在 `server/.env`。

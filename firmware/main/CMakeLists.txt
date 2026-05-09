@@ -4,7 +4,7 @@ idf_component_register(
         "app_wifi.c"
         "app_http.c"
         "app_audio_codec.c"
-        "app_ui_lvgl.c"
+        "app_console.c"
     INCLUDE_DIRS
         "."
     PRIV_REQUIRES
@@ -21,7 +21,4 @@ idf_component_register(
         freertos
         esp_codec_dev
         hiwonder_board
-        lvgl
 )
-
-target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_CONF_INCLUDE_SIMPLE=1)

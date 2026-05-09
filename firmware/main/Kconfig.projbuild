@@ -2,21 +2,22 @@ menu "Ai Watch"
 
     config AIW_WIFI_SSID
         string "WiFi SSID"
-        default "myssid"
+        default "maomao"
         help
-            STA 模式要连接的 2.4G WiFi 名称。
+            WiFi network name (2.4 GHz).
+            Use menuconfig to enter non-ASCII SSID (UTF-8 terminal recommended).
 
     config AIW_WIFI_PASSWORD
         string "WiFi password"
-        default "mypassword"
+        default "12345678"
         help
-            WiFi 密码。
+            WiFi password.
 
     config AIW_SERVER_BASE_URL
         string "Backend base URL (no trailing slash)"
         default "http://192.168.1.100:8765"
         help
-            本机 FastAPI 服务地址，例如 http://192.168.1.100:8765
+            Local FastAPI server URL.
 
     config AIW_DEVICE_NAME
         string "Device display name"
