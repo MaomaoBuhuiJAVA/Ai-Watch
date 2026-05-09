@@ -1,0 +1,16 @@
+idf_component_register(
+    SRCS
+        "iic.c"
+        "xl9555.c"
+        "spi.c"
+        "board_lcd.c"
+        "touch.c"
+        "ft6206.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        driver
+        esp_lcd
+        esp_timer
+        freertos
+)

@@ -1,0 +1,21 @@
+# ESP-IDF
+firmware/build/
+firmware/managed_components/
+firmware/dependencies.lock
+firmware/sdkconfig
+firmware/sdkconfig.old
+
+# Python server
+server/.venv/
+server/__pycache__/
+server/.env
+server/data/*.db
+server/data/wav/
+*.pyc
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
