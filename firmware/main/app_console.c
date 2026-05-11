@@ -2,17 +2,13 @@
 #include "app_wifi.h"
 #include "app_http.h"
 #include "app_audio_codec.h"
-#include "sdkconfig.h"
 #include "xl9555.h"
-#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
-static const char *TAG = "console";
 
 static void trim_newline(char *s)
 {

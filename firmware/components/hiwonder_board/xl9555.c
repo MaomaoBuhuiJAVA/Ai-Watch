@@ -88,6 +88,9 @@ void xl9555_int_init(void)
 
 esp_err_t xl9555_init(void)
 {
+    if (xl9555_handle != NULL) {
+        return ESP_OK;
+    }
     uint8_t r_data[2];
     if (bus_handle == NULL) {
         ESP_ERROR_CHECK(myiic_init());

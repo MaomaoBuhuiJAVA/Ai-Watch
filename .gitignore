@@ -5,6 +5,14 @@ firmware/dependencies.lock
 firmware/sdkconfig
 firmware/sdkconfig.old
 
+# ESP-IDF (LVGL board app)
+firmware_lvgl_board/build/
+firmware_lvgl_board/managed_components/
+firmware_lvgl_board/dependencies.lock
+firmware_lvgl_board/sdkconfig
+firmware_lvgl_board/sdkconfig.old
+firmware_lvgl_board/.cache/
+
 # Python server
 server/.venv/
 server/__pycache__/

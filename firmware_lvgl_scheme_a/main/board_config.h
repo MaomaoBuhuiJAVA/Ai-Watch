@@ -1,0 +1,4 @@
+#pragma once
+
+#define BOARD_AUDIO_SAMPLE_RATE 16000
+#define BOARD_RECORD_MAX_BYTES (1024 * 1024)

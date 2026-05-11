@@ -1,0 +1,32 @@
+menu "Ai Watch"
+
+    config AIW_WIFI_SSID
+        string "WiFi SSID (e.g. phone hotspot name)"
+        default "iPhone"
+        help
+            2.4 GHz Wi-Fi name to connect (e.g. iPhone personal hotspot).
+
+    config AIW_WIFI_PASSWORD
+        string "WiFi password"
+        default "12345678"
+        help
+            Wi-Fi password.
+
+    config AIW_SERVER_BASE_URL
+        string "Backend base URL (no trailing slash)"
+        default "http://172.20.10.4:8765"
+        help
+            Local FastAPI server URL.
+
+    config AIW_DEVICE_NAME
+        string "Device display name"
+        default "ai-watch-01"
+
+    config AIW_XL9555_SPK_HIGH_ENABLES_AMP
+        bool "XL9555 MUTE/功放脚：高电平=喇叭通（无声时取消勾选试反相）"
+        default y
+        help
+            与原理图中该脚接到 NS4150 类功放的 /SHDN、EN 还是 MUTE 有关。
+            若开机滴声、播放仍无声，在《ESP32S3开发板原理图_V1.1》中查该脚有效电平，与本项相反时取消勾选。
+
+endmenu

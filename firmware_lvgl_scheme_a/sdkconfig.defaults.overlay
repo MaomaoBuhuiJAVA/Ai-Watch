@@ -1,0 +1,10 @@
+# Merged into generated firmware_lvgl_board/sdkconfig.defaults (keys appended if missing)
+CONFIG_CODEC_ES8311_SUPPORT=y
+CONFIG_LV_FONT_MONTSERRAT_18=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-16MiB.csv"
+# Default STA: iPhone personal hotspot (override in menuconfig if your SSID differs)
+CONFIG_AIW_WIFI_SSID="iPhone"
+CONFIG_AIW_WIFI_PASSWORD="12345678"

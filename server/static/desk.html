@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ai Watch 服务台</title>
+  <style>
+    :root { --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9cb3; --accent: #3d8bfd; --ok: #3fb950; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 1rem 1.25rem 2rem; line-height: 1.5; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.25rem; }
+    p.lead { color: var(--muted); margin: 0 0 1.25rem; font-size: 0.95rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+    section { background: var(--card); border-radius: 10px; padding: 1rem 1.1rem; flex: 1 1 320px; min-width: 280px; }
+    section h2 { font-size: 1rem; margin: 0 0 0.75rem; color: #c8d4e6; }
+    textarea { width: 100%; min-height: 120px; background: #0d1117; color: var(--text); border: 1px solid #30363d; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.9rem; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 0.45rem 1rem; font-size: 0.9rem; cursor: pointer; margin-top: 0.5rem; }
+    button.secondary { background: #30363d; }
+    button:hover { filter: brightness(1.08); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { text-align: left; padding: 0.35rem 0.4rem; border-bottom: 1px solid #30363d; vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    .tag { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 4px; background: #21262d; font-size: 0.75rem; color: #8b9cb3; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.78rem; word-break: break-all; }
+    #health { font-size: 0.85rem; color: var(--ok); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Ai Watch 服务台</h1>
+  <p class="lead">查看对话与录音记录；修改大模型系统提示词（对后续所有对话生效）。固件里的 WiFi / 服务器地址仍在 <code>menuconfig</code> 中配置。</p>
+  <p id="health">…</p>
+  <p><a href="/docs">OpenAPI 文档</a> · <a href="/">API 根路径</a></p>
+
+  <div class="row">
+    <section>
+      <h2>系统提示词（DeepSeek system）</h2>
+      <textarea id="sysPrompt" placeholder="加载中…"></textarea>
+      <div>
+        <button type="button" id="saveSys">保存</button>
+        <button type="button" class="secondary" id="reloadSys">重新加载</button>
+      </div>
+      <p class="mono" id="sysMsg" style="margin-top:0.5rem;color:var(--muted);"></p>
+    </section>
+  </div>
+
+  <div class="row" style="margin-top:1rem;">
+    <section style="flex:2 1 480px;">
+      <h2>对话历史 <button type="button" class="secondary" id="reloadChat" style="margin:0 0 0 0.5rem;">刷新</button></h2>
+      <div style="max-height:420px;overflow:auto;">
+        <table>
+          <thead><tr><th>时间</th><th>设备</th><th>角色</th><th>来源</th><th>内容</th></tr></thead>
+          <tbody id="chatBody"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>录音文件 <button type="button" class="secondary" id="reloadRec" style="margin:0 0 0 0.5rem;">刷新</button></h2>
+      <div style="max-height:420px;overflow:auto;">
+        <table>
+          <thead><tr><th>ID</th><th>设备</th><th>转写</th></tr></thead>
+          <tbody id="recBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    async function health() {
+      try {
+        const j = await (await fetch("/health")).json();
+        $("health").textContent = "服务正常 · " + new Date(j.ts * 1000).toLocaleString();
+      } catch (e) {
+        $("health").textContent = "无法连接 /health";
+        $("health").style.color = "#f85149";
+      }
+    }
+
+    async function loadSys() {
+      $("sysMsg").textContent = "";
+      const r = await fetch("/api/settings/chat_system_prompt");
+      const j = await r.json();
+      $("sysPrompt").value = j.value || "";
+    }
+
+    async function saveSys() {
+      $("sysMsg").textContent = "保存中…";
+      const r = await fetch("/api/settings/chat_system_prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: $("sysPrompt").value }),
+      });
+      const j = await r.json();
+      $("sysMsg").textContent = r.ok ? "已保存。" : (j.detail || JSON.stringify(j));
+    }
+
+    function esc(s) {
+      return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    }
+
+    async function loadChat() {
+      const r = await fetch("/api/chat/history?limit=150");
+      const j = await r.json();
+      const tb = $("chatBody");
+      tb.innerHTML = "";
+      for (const it of j.items || []) {
+        const tr = document.createElement("tr");
+        const t = new Date((it.created_at || 0) * 1000).toLocaleString();
+        tr.innerHTML = `<td class="mono">${esc(t)}</td><td>${esc(it.device_name)}</td><td><span class="tag">${esc(it.role)}</span></td><td>${esc(it.source)}</td><td>${esc(it.content)}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    async function loadRec() {
+      const r = await fetch("/api/recordings");
+      const j = await r.json();
+      const tb = $("recBody");
+      tb.innerHTML = "";
+      for (const it of j.items || []) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${it.id}</td><td>${esc(it.device_name)}</td><td>${esc(it.transcript)}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    $("saveSys").onclick = saveSys;
+    $("reloadSys").onclick = loadSys;
+    $("reloadChat").onclick = loadChat;
+    $("reloadRec").onclick = loadRec;
+
+    health();
+    loadSys();
+    loadChat();
+    loadRec();
+    setInterval(health, 15000);
+  </script>
+</body>
+</html>

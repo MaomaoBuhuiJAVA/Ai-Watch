@@ -22,12 +22,12 @@ void app_main(void)
     ESP_ERROR_CHECK(myiic_init1());
     ESP_ERROR_CHECK(xl9555_init());
 
-    ESP_LOGI(TAG, "WiFi connecting…");
+    ESP_LOGI(TAG, "Wi-Fi STA (SSID/password: menuconfig → Ai Watch)");
     ESP_ERROR_CHECK(app_wifi_init_sta());
-    if (app_wifi_wait_connected(60000) != ESP_OK) {
-        ESP_LOGE(TAG, "WiFi failed — fix SSID/password in menuconfig, then reset");
+    if (app_wifi_wait_connected(120000) != ESP_OK) {
+        ESP_LOGE(TAG, "Wi-Fi failed — check SSID/password and 2.4 GHz hotspot");
     } else {
-        ESP_LOGI(TAG, "WiFi OK, IP: %s", app_wifi_ip_str());
+        ESP_LOGI(TAG, "Wi-Fi OK, IP: %s", app_wifi_ip_str());
     }
 
     app_audio_init();

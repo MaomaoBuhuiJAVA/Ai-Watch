@@ -10,7 +10,8 @@ MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 async def chat_completion(user_text: str, system_prompt: Optional[str] = None) -> str:
     if not KEY:
-        return "（未配置 DEEPSEEK_API_KEY）"
+        # 无密钥时仅回显用户原文（不写服务台/手表可见的长说明）
+        return (user_text or "").strip()
     system_prompt = system_prompt or (
         "你是 Ai Watch 智能助理，回答简洁，可中文。"
         "用户设备用于日程、录音复盘与隐私控制；不要编造未发生的录音内容。"

@@ -1,0 +1,5 @@
+## 与 Ai Watch\firmware\main\idf_component.yml 一致：托管 Codec（教程自带 LVGL 目录，勿再加 lvgl 包）
+dependencies:
+  idf: "^5.0"
+  espressif/es8311: "^1.0.0"
+  espressif/esp_codec_dev: "~1.4.0"

@@ -1,0 +1,25 @@
+#ifndef __IIC_H
+#define __IIC_H
+
+#include "driver/gpio.h"
+
+#include "driver/i2c_master.h"
+#include "esp_err.h"
+
+/* 引脚与相关参数定义 */
+#define IIC_NUM_PORT       I2C_NUM_0        /* IIC0 */
+#define IIC_SPEED_CLK      400000           /* 速率400K */
+#define IIC_SDA_GPIO_PIN   GPIO_NUM_38      /* IIC0_SDA引脚 */
+#define IIC_SCL_GPIO_PIN   GPIO_NUM_48      /* IIC0_SCL引脚 */
+
+#define IIC1_NUM_PORT      I2C_NUM_1
+#define IIC1_SDA_GPIO_PIN  GPIO_NUM_4
+#define IIC1_SCL_GPIO_PIN  GPIO_NUM_5
+
+extern i2c_master_bus_handle_t bus_handle;   /* 总线句柄 */
+extern i2c_master_bus_handle_t bus_handle1;  /* I2C1 句柄 */
+
+esp_err_t myiic_init(void);
+esp_err_t myiic_init1(void);
+
+#endif
