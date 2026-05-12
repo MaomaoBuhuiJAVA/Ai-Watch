@@ -57,3 +57,7 @@ export const api = {
 export function recordingFileUrl(id: number, kind: "wav" | "mp3" | "txt") {
   return `${base()}/api/recordings/${id}/file?kind=${kind}`;
 }
+
+export function recordingExportUrl(id: number, format: "docx" | "pdf") {
+  return `${base()}/api/recordings/${id}/export?format=${format}`;
+}

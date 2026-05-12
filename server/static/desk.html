@@ -245,6 +245,25 @@
       return h;
     }
 
+    function formatSummaryModal(sum) {
+      if (!sum || !sum.title) return "";
+      if (sum.kind === "work_plan" && sum.tasks && sum.tasks.length) {
+        var rows = sum.tasks.map(function (t) {
+          return "<tr><td style=\"padding:0.35rem 0.25rem;border-bottom:1px solid var(--border);vertical-align:top;\">" + esc(t.time_node || "") + "</td>" +
+            "<td style=\"padding:0.35rem 0.25rem;border-bottom:1px solid var(--border);\">" + esc(t.task_content || "") + "</td>" +
+            "<td style=\"padding:0.35rem 0.25rem;border-bottom:1px solid var(--border);white-space:nowrap;\">" + esc(t.assignee || "待定") + "</td></tr>";
+        }).join("");
+        return "<p style=\"font-weight:600;margin:0 0 0.35rem;\">" + esc(sum.title) + "</p>" +
+          "<p style=\"font-size:0.72rem;color:var(--muted);margin:0 0 0.5rem;\">工作计划 · 任务路线图</p>" +
+          "<table style=\"width:100%;font-size:0.8rem;border-collapse:collapse;\"><thead><tr>" +
+          "<th style=\"text-align:left;color:var(--muted);\">时间节点</th><th style=\"text-align:left;color:var(--muted);\">任务</th><th style=\"text-align:left;color:var(--muted);\">执行人</th></tr></thead><tbody>" +
+          rows + "</tbody></table>" +
+          (sum.report ? "<div style=\"margin-top:0.75rem;\">" + buildReportHtml(sum.report, []) + "</div>" : "");
+      }
+      return "<p style=\"font-weight:600;margin:0 0 0.5rem;\">" + esc(sum.title) + "</p>" +
+        "<div>" + buildReportHtml(sum.report, sum.highlights) + "</div>";
+    }
+
     async function health() {
       try {
         const j = await (await fetch("/health")).json();
@@ -377,8 +396,7 @@
               return;
             }
             $("sumTitle").textContent = out.summary.title || "总结";
-            $("sumBody").innerHTML = "<p style=\"font-weight:600;margin:0 0 0.5rem;\">" + esc(out.summary.title) + "</p>" +
-              "<div>" + buildReportHtml(out.summary.report, out.summary.highlights) + "</div>";
+            $("sumBody").innerHTML = formatSummaryModal(out.summary);
             $("sumModal").classList.add("on");
             loadRec();
           } finally {
@@ -396,8 +414,7 @@
           let sum;
           try { sum = JSON.parse(it.summary_json); } catch (e) { return; }
           $("sumTitle").textContent = sum.title || "总结";
-          $("sumBody").innerHTML = "<p style=\"font-weight:600;margin:0 0 0.5rem;\">" + esc(sum.title) + "</p>" +
-            "<div>" + buildReportHtml(sum.report, sum.highlights) + "</div>";
+          $("sumBody").innerHTML = formatSummaryModal(sum);
           $("sumModal").classList.add("on");
         };
       });

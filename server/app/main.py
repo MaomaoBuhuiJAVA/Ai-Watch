@@ -2,9 +2,12 @@ import asyncio
 import json
 import logging
 import os
+import shutil
+import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
@@ -13,17 +16,45 @@ load_dotenv()
 import aiosqlite
 import httpx
 from fastapi import FastAPI, Header, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 
 from . import baidu_tts, db, stt, voice_stream
 from .deepseek_client import chat_completion
+from .recording_export import recording_to_docx, recording_to_pdf
 from .recording_service import enrich_recording_after_save, summarize_recording
 
 log = logging.getLogger(__name__)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 DATA_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "data"))
+# main.py 在 server/app/，仓库根目录再上跳一级
+_REPO_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DESK_UI_DIR = os.path.join(_REPO_ROOT, "dist-desk")
+DESK_UI_ASSETS = os.path.join(DESK_UI_DIR, "assets")
+
+
+def _ensure_desk_dist() -> None:
+    """若 dist-desk 不存在，在仓库根目录自动 npm install + desk:build。"""
+    idx = os.path.join(DESK_UI_DIR, "index.html")
+    if os.path.isfile(idx):
+        return
+    if not shutil.which("npm"):
+        log.warning("dist-desk 缺失且未找到 npm（未在 PATH）。请安装 Node.js 后执行: npm run desk:build")
+        return
+    try:
+        if not os.path.isdir(os.path.join(_REPO_ROOT, "node_modules")):
+            log.info("正在 %s 执行 npm install（控制台依赖）…", _REPO_ROOT)
+            subprocess.run(["npm", "install"], cwd=_REPO_ROOT, timeout=600, check=False)
+        log.info("正在 %s 执行 npm run desk:build …", _REPO_ROOT)
+        r = subprocess.run(["npm", "run", "desk:build"], cwd=_REPO_ROOT, timeout=900, check=False)
+        if r.returncode != 0:
+            log.warning("desk:build 退出码 %s", r.returncode)
+        elif os.path.isfile(idx):
+            log.info("Dashboard 已构建: %s", idx)
+    except Exception as e:
+        log.warning("自动构建 dist-desk 失败: %s", e)
 
 app = FastAPI(title="Ai Watch Server", version="0.1.0")
 app.add_middleware(
@@ -37,6 +68,16 @@ app.add_middleware(
 @app.on_event("startup")
 async def _startup():
     await db.init_db()
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _ensure_desk_dist)
+    if os.path.isdir(DESK_UI_ASSETS) and not getattr(app.state, "desk_assets_mounted", False):
+        app.mount(
+            "/dashboard/assets",
+            StaticFiles(directory=DESK_UI_ASSETS),
+            name="desk_dashboard_assets",
+        )
+        app.state.desk_assets_mounted = True
+        log.info("已挂载 /dashboard/assets -> %s", DESK_UI_ASSETS)
     if not (os.getenv("DEEPSEEK_API_KEY") or "").strip():
         log.warning(
             "DEEPSEEK_API_KEY is empty — /api/chat and /api/chat/from_wav return 503 until set in server/.env"
@@ -44,12 +85,17 @@ async def _startup():
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
+    accept = (request.headers.get("accept") or "").lower()
+    desk_idx = os.path.join(DESK_UI_DIR, "index.html")
+    if "text/html" in accept and os.path.isfile(desk_idx):
+        return RedirectResponse(url="/dashboard/", status_code=302)
     return PlainTextResponse(
         "Ai Watch API\n"
+        "  GET  /dashboard/  (新版控制台 Dashboard，需先 npm run desk:build)\n"
         "  GET  /health\n"
         "  GET  /api/time  (北京时间 Unix，供手表 HTTP 校时)\n"
-        "  GET  /desk  (服务台网页：历史与系统提示词)\n"
+        "  GET  /desk  (旧版静态服务台)\n"
         "  POST /api/chat  (JSON: {\"message\":\"...\"})\n"
         "  POST /api/chat/from_wav  (body: WAV, 语音识别后对话)\n"
         "  POST /api/voice_stream/start | .../chunk | .../finish(save_recording→desk) | .../chat\n"
@@ -57,6 +103,7 @@ async def root():
         "  POST /api/recordings/upload  (body: WAV)\n"
         "  GET  /api/recordings  (含分类、转写路径、总结 JSON)\n"
         "  GET  /api/recordings/{id}/file?kind=wav|mp3|txt\n"
+        "  GET  /api/recordings/{id}/export?format=docx|pdf\n"
         "  POST /api/recordings/{id}/summarize  (JSON 可选 prompt_card_slug)\n"
         "  GET/POST/DELETE /api/prompt_cards  (提示词方案卡片)\n"
         "  GET  /docs  (Swagger)\n",
@@ -70,6 +117,25 @@ async def desk_page():
     if not os.path.isfile(path):
         return PlainTextResponse("desk.html missing", status_code=404)
     return FileResponse(path, media_type="text/html; charset=utf-8")
+
+
+@app.get("/dashboard")
+async def dashboard_redirect():
+    return RedirectResponse(url="/dashboard/", status_code=307)
+
+
+@app.get("/dashboard/")
+async def dashboard_spa():
+    idx = os.path.join(DESK_UI_DIR, "index.html")
+    if not os.path.isfile(idx):
+        return PlainTextResponse(
+            "React 控制台未构建。\n"
+            "请在仓库根目录执行：npm install && npm run desk:build\n"
+            "仅开发 UI：npm run desk:dev → http://127.0.0.1:5173\n",
+            status_code=404,
+            media_type="text/plain; charset=utf-8",
+        )
+    return FileResponse(idx, media_type="text/html; charset=utf-8")
 
 
 @app.get("/favicon.ico")
@@ -357,6 +423,60 @@ async def recording_file(rid: int, kind: str = "wav"):
         return JSONResponse({"error": "file not ready or unsupported"}, status_code=404)
     media = {"wav": "audio/wav", "mp3": "audio/mpeg", "txt": "text/plain; charset=utf-8"}[kind]
     return FileResponse(p, media_type=media, filename=os.path.basename(p))
+
+
+@app.get("/api/recordings/{rid}/export")
+async def recording_export(rid: int, format: str = "docx"):
+    row = await db.get_recording_row(rid)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    fmt = (format or "docx").lower().strip()
+    base_fn = f"recording-{int(rid)}"
+    disp = f'attachment; filename="{base_fn}.{fmt}"'
+    disp_utf8 = f"; filename*=UTF-8''{quote(base_fn + '.' + fmt)}"
+    if fmt == "docx":
+        try:
+            data = recording_to_docx(row)
+        except ModuleNotFoundError as e:
+            log.warning("recording docx export: missing dependency: %s", e)
+            return JSONResponse(
+                {
+                    "error": str(e),
+                    "hint": "在 server 目录用「当前运行服务的同一个 Python」执行: python -m pip install python-docx reportlab",
+                    "mirror": "若下载慢: python -m pip install python-docx reportlab -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn",
+                },
+                status_code=503,
+            )
+        except Exception as e:
+            log.exception("recording docx export rid=%s", rid)
+            return JSONResponse({"error": str(e)}, status_code=500)
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": disp + disp_utf8},
+        )
+    if fmt == "pdf":
+        try:
+            data = recording_to_pdf(row)
+        except ModuleNotFoundError as e:
+            log.warning("recording pdf export: missing dependency: %s", e)
+            return JSONResponse(
+                {
+                    "error": str(e),
+                    "hint": "在 server 目录用「当前运行服务的同一个 Python」执行: python -m pip install python-docx reportlab",
+                    "mirror": "若下载慢: python -m pip install python-docx reportlab -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn",
+                },
+                status_code=503,
+            )
+        except Exception as e:
+            log.exception("recording pdf export rid=%s", rid)
+            return JSONResponse({"error": str(e)}, status_code=500)
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": disp + disp_utf8},
+        )
+    return JSONResponse({"error": "format must be docx or pdf"}, status_code=400)
 
 
 @app.post("/api/recordings/{rid}/summarize")

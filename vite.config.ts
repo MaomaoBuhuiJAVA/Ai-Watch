@@ -4,6 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  /** 相对路径：可挂在 /dashboard/ 或由 file 协议打开时不丢资源 */
+  base: "./",
   root: "newsrc",
   build: {
     outDir: "../dist-desk",

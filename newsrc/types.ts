@@ -21,10 +21,19 @@ export type Recording = {
   created_at: number;
 };
 
+export type WorkPlanTask = {
+  time_node: string;
+  task_content: string;
+  assignee: string;
+};
+
+/** 与后端 summary_json 对齐：工作计划含 tasks；语音复盘/其他为 review + highlights */
 export type SummaryPayload = {
+  kind?: "work_plan" | "review";
   title?: string;
   report?: string;
   highlights?: string[];
+  tasks?: WorkPlanTask[];
 };
 
 export type PromptCard = {
