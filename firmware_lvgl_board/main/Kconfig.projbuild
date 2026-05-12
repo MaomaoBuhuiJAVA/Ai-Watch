@@ -22,6 +22,25 @@ menu "Ai Watch"
         string "Device display name"
         default "ai-watch-01"
 
+    config AIW_SNTP_ENABLE
+        bool "Enable SNTP (sync wall clock after Wi-Fi)"
+        default y
+        help
+            Uses pool.ntp.org (or AIW_SNTP_SERVER) so the watch shows real local time.
+            Set AIW_TZ to match your computer's timezone (POSIX TZ string).
+
+    config AIW_SNTP_SERVER
+        string "SNTP server hostname"
+        default "cn.pool.ntp.org"
+        depends on AIW_SNTP_ENABLE
+
+    config AIW_TZ
+        string "POSIX TZ (same idea as PC timezone)"
+        default "CST-8"
+        depends on AIW_SNTP_ENABLE
+        help
+            Examples: CST-8 (China mainland), UTC0, EST5EDT,M3.2.0/2,M11.1.0/2 (US Eastern with DST).
+
     config AIW_XL9555_SPK_HIGH_ENABLES_AMP
         bool "XL9555 MUTE/功放脚：高电平=喇叭通（无声时取消勾选试反相）"
         default y

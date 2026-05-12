@@ -5,6 +5,8 @@
 #include "esp_log.h"
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 
 static const char *TAG = "app_http";
 
@@ -205,6 +207,71 @@ esp_err_t app_http_post_pcm_voice_chat(const uint8_t *pcm, size_t pcm_len, uint3
                                    120000);
 }
 
+esp_err_t app_http_voice_stream_start(char *session_id_out, size_t out_cap)
+{
+    if (!session_id_out || out_cap < 40) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char resp[320];
+    esp_err_t e = app_http_post_json("/api/voice_stream/start", "{}", resp, sizeof(resp));
+    if (e != ESP_OK) {
+        return e;
+    }
+    cJSON *root = cJSON_Parse(resp);
+    if (!root) {
+        return ESP_FAIL;
+    }
+    cJSON *id = cJSON_GetObjectItem(root, "session_id");
+    if (!cJSON_IsString(id) || !id->valuestring) {
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+    strncpy(session_id_out, id->valuestring, out_cap - 1);
+    session_id_out[out_cap - 1] = '\0';
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+esp_err_t app_http_voice_stream_chunk(const char *session_id, const uint8_t *pcm, size_t pcm_len)
+{
+    if (!session_id || !session_id[0] || !pcm || pcm_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char url[224];
+    snprintf(url, sizeof(url), "%s/api/voice_stream/%s/chunk", CONFIG_AIW_SERVER_BASE_URL, session_id);
+    char drain[96];
+    return http_post_raw(url, "application/octet-stream", pcm, pcm_len, drain, sizeof(drain));
+}
+
+esp_err_t app_http_voice_stream_finish(const char *session_id, bool run_chat, bool save_recording,
+                                       char *json_out, size_t json_out_len)
+{
+    if (!session_id || !session_id[0] || !json_out || json_out_len < 64) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char path[120];
+    snprintf(path, sizeof(path), "/api/voice_stream/%s/finish", session_id);
+    const char *body;
+    if (run_chat) {
+        body = "{\"chat\":true}";
+    } else if (save_recording) {
+        body = "{\"chat\":false,\"save_recording\":true}";
+    } else {
+        body = "{\"chat\":false}";
+    }
+    return app_http_post_json(path, body, json_out, json_out_len);
+}
+
+esp_err_t app_http_voice_stream_chat(const char *session_id, char *json_out, size_t json_out_len)
+{
+    if (!session_id || !session_id[0] || !json_out || json_out_len < 64) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char path[120];
+    snprintf(path, sizeof(path), "/api/voice_stream/%s/chat", session_id);
+    return app_http_post_json(path, "{}", json_out, json_out_len);
+}
+
 esp_err_t app_http_fetch_tts_wav(const char *utf8_text, uint8_t **wav_out, size_t *wav_len_out)
 {
     *wav_out = NULL;
@@ -326,5 +393,95 @@ esp_err_t app_http_fetch_tts_wav(const char *utf8_text, uint8_t **wav_out, size_
     }
     *wav_out = buf;
     *wav_len_out = total;
+    return ESP_OK;
+}
+
+static esp_err_t http_get_to_buf(const char *url, char *resp_out, size_t resp_out_len, int timeout_ms)
+{
+    if (!resp_out || resp_out_len < 8) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_http_client_config_t cfg = {
+        .url = url,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = timeout_ms,
+    };
+    esp_http_client_handle_t cl = esp_http_client_init(&cfg);
+    if (!cl) {
+        return ESP_FAIL;
+    }
+    esp_http_client_set_header(cl, "X-Device-Name", CONFIG_AIW_DEVICE_NAME);
+    esp_err_t err = esp_http_client_open(cl, 0);
+    if (err != ESP_OK) {
+        esp_http_client_cleanup(cl);
+        return err;
+    }
+    esp_http_client_fetch_headers(cl);
+    int st = esp_http_client_get_status_code(cl);
+    resp_out[0] = '\0';
+    size_t got = 0;
+    while (got + 1 < resp_out_len) {
+        int r = esp_http_client_read(cl, resp_out + got, (int)(resp_out_len - 1 - got));
+        if (r <= 0) {
+            break;
+        }
+        got += (size_t)r;
+        resp_out[got] = '\0';
+    }
+    char drain[256];
+    while (esp_http_client_read(cl, drain, sizeof(drain)) > 0) {
+    }
+    esp_http_client_close(cl);
+    esp_http_client_cleanup(cl);
+    if (st < 200 || st >= 300) {
+        ESP_LOGW(TAG, "GET %s status %d", url, st);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+esp_err_t app_http_sync_time_from_server(void)
+{
+    char url[256];
+    snprintf(url, sizeof(url), "%s/api/time", CONFIG_AIW_SERVER_BASE_URL);
+
+    char buf[384];
+    esp_err_t err = http_get_to_buf(url, buf, sizeof(buf), 8000);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "GET /api/time failed");
+        return err;
+    }
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        ESP_LOGW(TAG, "time JSON parse fail");
+        return ESP_FAIL;
+    }
+    cJSON *ju = cJSON_GetObjectItem(root, "unix");
+    if (!cJSON_IsNumber(ju)) {
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+    double du = cJSON_GetNumberValue(ju);
+    time_t sec = (time_t)du;
+    if (sec < 1700000000) {
+        ESP_LOGW(TAG, "time unix implausible: %lld", (long long)sec);
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+    cJSON_Delete(root);
+
+    struct timeval tv = {.tv_sec = sec, .tv_usec = 0};
+    if (settimeofday(&tv, NULL) != 0) {
+        ESP_LOGW(TAG, "settimeofday failed");
+        return ESP_FAIL;
+    }
+#if CONFIG_AIW_SNTP_ENABLE
+    setenv("TZ", CONFIG_AIW_TZ, 1);
+#else
+    setenv("TZ", "CST-8", 1);
+#endif
+    tzset();
+    ESP_LOGI(TAG, "clock set from server /api/time");
     return ESP_OK;
 }

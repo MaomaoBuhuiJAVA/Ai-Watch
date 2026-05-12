@@ -1,0 +1,52 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100;200;300;400;500;600;700;800;900&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #3b82f6;
+  --color-brand-glow: rgba(59, 130, 246, 0.55);
+  --color-surface: #121217;
+  --color-canvas: #0a0a0c;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply min-h-screen bg-[#0A0A0C] font-sans text-slate-200 antialiased;
+    font-weight: 400;
+  }
+}
+
+@layer utilities {
+  .glass-dark {
+    @apply border border-white/5 bg-[#121217]/55 shadow-2xl shadow-black/50 backdrop-blur-2xl;
+  }
+  .glass-card {
+    @apply border border-white/5 bg-white/[0.04] backdrop-blur-xl transition-all duration-500 hover:border-white/15;
+  }
+  .glow-text {
+    text-shadow: 0 0 24px rgba(59, 130, 246, 0.45), 0 0 48px rgba(59, 130, 246, 0.2);
+  }
+  .glow-text-subtle {
+    text-shadow: 0 0 18px rgba(59, 130, 246, 0.35);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-white/10 hover:bg-white/20;
+}

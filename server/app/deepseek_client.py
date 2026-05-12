@@ -3,29 +3,32 @@ from typing import Optional
 
 import httpx
 
-BASE = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
-KEY = os.getenv("DEEPSEEK_API_KEY", "")
-MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+# 注意：不在模块 import 时读 os.getenv — main.py 在 import 本模块后才 load_dotenv()，
+# 否则 DEEPSEEK_API_KEY 会一直为空，表现为回显用户话或 503。
 
 
 async def chat_completion(user_text: str, system_prompt: Optional[str] = None) -> str:
-    if not KEY:
-        # 无密钥时仅回显用户原文（不写服务台/手表可见的长说明）
-        return (user_text or "").strip()
+    key = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+    if not key:
+        raise ValueError(
+            "未配置 DeepSeek：在 server/.env 中设置 DEEPSEEK_API_KEY（https://platform.deepseek.com/api_keys ）"
+        )
+    base = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
+    model = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip() or "deepseek-chat"
     system_prompt = system_prompt or (
         "你是 Ai Watch 智能助理，回答简洁，可中文。"
         "用户设备用于日程、录音复盘与隐私控制；不要编造未发生的录音内容。"
     )
-    url = f"{BASE}/v1/chat/completions"
+    url = f"{base}/v1/chat/completions"
     payload = {
-        "model": MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},
         ],
         "temperature": 0.6,
     }
-    headers = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=120.0) as client:
         r = await client.post(url, json=payload, headers=headers)
         r.raise_for_status()

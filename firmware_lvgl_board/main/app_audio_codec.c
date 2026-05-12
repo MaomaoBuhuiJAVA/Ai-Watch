@@ -15,6 +15,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/portmacro.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,8 +45,13 @@ static const audio_codec_if_t *s_codec_if = NULL;
 
 static uint8_t *s_pcm = NULL;
 static size_t s_pcm_cap = 0;
-static volatile size_t s_pcm_len = 0;
+static size_t s_pcm_len = 0;
+/** 已通过流式上传消费的 PCM 字节（环形逻辑：数据在 [skip, len)） */
+static size_t s_pcm_skip = 0;
+static portMUX_TYPE s_pcm_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool s_recording = false;
+
+static void pcm_compact_internal(void);
 static TaskHandle_t s_cap_task = NULL;
 static uint32_t s_cap_read_fail;
 
@@ -207,6 +213,21 @@ static esp_err_t init_es8311(void)
     return ESP_OK;
 }
 
+static void pcm_compact_internal(void)
+{
+    size_t used = s_pcm_len - s_pcm_skip;
+    if (used == 0) {
+        s_pcm_len = 0;
+        s_pcm_skip = 0;
+        return;
+    }
+    if (s_pcm_skip > 0) {
+        memmove(s_pcm, s_pcm + s_pcm_skip, used);
+        s_pcm_len = used;
+        s_pcm_skip = 0;
+    }
+}
+
 static esp_err_t flush_upload_if_allowed(void)
 {
     bool privacy = false;
@@ -222,11 +243,26 @@ static esp_err_t flush_upload_if_allowed(void)
         ESP_LOGI(TAG, "privacy on, skip upload");
         return ESP_ERR_NOT_SUPPORTED;
     }
-    if (s_pcm_len < sizeof(int16_t) * 50) {
+    size_t eff = 0;
+    taskENTER_CRITICAL(&s_pcm_mux);
+    eff = (s_pcm_len > s_pcm_skip) ? (s_pcm_len - s_pcm_skip) : 0;
+    taskEXIT_CRITICAL(&s_pcm_mux);
+    if (eff < sizeof(int16_t) * 50) {
         ESP_LOGW(TAG, "too short, skip upload");
         return ESP_ERR_INVALID_SIZE;
     }
-    return app_http_upload_wav_pcm(s_pcm, s_pcm_len, BOARD_AUDIO_SAMPLE_RATE);
+    uint8_t *tmp = (uint8_t *)malloc(eff);
+    if (!tmp) {
+        return ESP_ERR_NO_MEM;
+    }
+    taskENTER_CRITICAL(&s_pcm_mux);
+    memcpy(tmp, s_pcm + s_pcm_skip, eff);
+    s_pcm_skip += eff;
+    pcm_compact_internal();
+    taskEXIT_CRITICAL(&s_pcm_mux);
+    esp_err_t er = app_http_upload_wav_pcm(tmp, eff, BOARD_AUDIO_SAMPLE_RATE);
+    free(tmp);
+    return er;
 }
 
 static void capture_task(void *arg)
@@ -249,14 +285,24 @@ static void capture_task(void *arg)
             continue;
         }
         s_cap_read_fail = 0;
-        if (s_pcm_cap == 0 || s_pcm_len + (size_t)want > s_pcm_cap) {
+        const size_t want_sz = (size_t)want;
+        taskENTER_CRITICAL(&s_pcm_mux);
+        if (s_pcm_cap == 0) {
+            taskEXIT_CRITICAL(&s_pcm_mux);
+            continue;
+        }
+        while (s_pcm_len + want_sz > s_pcm_cap && s_pcm_skip > 0) {
+            pcm_compact_internal();
+        }
+        if (s_pcm_len + want_sz > s_pcm_cap) {
+            taskEXIT_CRITICAL(&s_pcm_mux);
             ESP_LOGW(TAG, "buffer full, stopping capture");
             s_recording = false;
             continue;
         }
-        size_t cur = s_pcm_len;
-        memcpy(s_pcm + cur, chunk, (size_t)want);
-        s_pcm_len = cur + (size_t)want;
+        memcpy(s_pcm + s_pcm_len, chunk, want_sz);
+        s_pcm_len += want_sz;
+        taskEXIT_CRITICAL(&s_pcm_mux);
     }
 }
 
@@ -357,13 +403,22 @@ void app_audio_record_set(bool on)
             ESP_LOGW(TAG, "record start ignored: codec/task not ready");
             return;
         }
+        taskENTER_CRITICAL(&s_pcm_mux);
         s_pcm_len = 0;
+        s_pcm_skip = 0;
+        taskEXIT_CRITICAL(&s_pcm_mux);
         s_cap_read_fail = 0;
         s_recording = true;
         ESP_LOGI(TAG, "record start");
     } else if (!on && s_recording) {
         s_recording = false;
-        ESP_LOGI(TAG, "record stop, bytes=%u", (unsigned)s_pcm_len);
+        {
+            size_t eff = 0;
+            taskENTER_CRITICAL(&s_pcm_mux);
+            eff = (s_pcm_len > s_pcm_skip) ? (s_pcm_len - s_pcm_skip) : 0;
+            taskEXIT_CRITICAL(&s_pcm_mux);
+            ESP_LOGI(TAG, "record stop, pending_pcm=%u B", (unsigned)eff);
+        }
     }
 }
 
@@ -379,12 +434,53 @@ void app_audio_record_toggle(void)
 
 size_t app_audio_pcm_bytes(void)
 {
-    return s_pcm_len;
+    taskENTER_CRITICAL(&s_pcm_mux);
+    size_t n = (s_pcm_len > s_pcm_skip) ? (s_pcm_len - s_pcm_skip) : 0;
+    taskEXIT_CRITICAL(&s_pcm_mux);
+    return n;
 }
 
 const uint8_t *app_audio_pcm_data(void)
 {
-    return s_pcm;
+    if (!s_pcm) {
+        return NULL;
+    }
+    return s_pcm + s_pcm_skip;
+}
+
+void app_audio_pcm_copy_and_consume(uint8_t *dst, size_t want, size_t *got_out)
+{
+    if (got_out) {
+        *got_out = 0;
+    }
+    if (!dst || !got_out || want < 2) {
+        return;
+    }
+    want &= ~(size_t)1u;
+    taskENTER_CRITICAL(&s_pcm_mux);
+    size_t avail = (s_pcm_len > s_pcm_skip) ? (s_pcm_len - s_pcm_skip) : 0;
+    size_t take = want < avail ? want : avail;
+    take &= ~(size_t)1u;
+    if (take > 0 && s_pcm) {
+        memcpy(dst, s_pcm + s_pcm_skip, take);
+        s_pcm_skip += take;
+        if (s_pcm_cap > 0 && s_pcm_skip > (s_pcm_cap / 4u)) {
+            pcm_compact_internal();
+        }
+        *got_out = take;
+    }
+    taskEXIT_CRITICAL(&s_pcm_mux);
+}
+
+void app_audio_pcm_buffer_reset(void)
+{
+    if (!s_pcm) {
+        return;
+    }
+    taskENTER_CRITICAL(&s_pcm_mux);
+    s_pcm_len = 0;
+    s_pcm_skip = 0;
+    taskEXIT_CRITICAL(&s_pcm_mux);
 }
 
 static void play_tone_ms(uint16_t freq_hz, unsigned dur_ms, float amp)

@@ -1,5 +1,6 @@
 #include "app_wifi.h"
 #include "sdkconfig.h"
+#include "app_http.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -7,7 +8,19 @@
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/task.h"
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
+
+#if CONFIG_AIW_SNTP_ENABLE
+#include "esp_netif_sntp.h"
+#if __has_include("esp_sntp.h")
+#include "esp_sntp.h"
+#define AIW_HAVE_ESP_SNTP_RESTART 1
+#endif
+#endif
 
 static const char *TAG = "app_wifi";
 
@@ -16,8 +29,74 @@ static const char *TAG = "app_wifi";
 static EventGroupHandle_t s_wifi_evt;
 static char s_ip[20] = "0.0.0.0";
 
+/** 任一路径（HTTP /api/time 或 SNTP）校时成功后为 true。 */
+static volatile bool s_time_synced;
+static app_wifi_time_sync_cb_t s_time_sync_cb;
+static void *s_time_sync_user;
+
+static void fire_time_sync_cb(void)
+{
+    if (s_time_sync_cb) {
+        s_time_sync_cb(s_time_sync_user);
+    }
+}
+
+#if CONFIG_AIW_SNTP_ENABLE
+static bool s_sntp_started;
+
+static void sntp_sync_handler(struct timeval *tv)
+{
+    (void)tv;
+    s_time_synced = true;
+    fire_time_sync_cb();
+}
+
+static void app_wifi_sntp_try_start(void)
+{
+    if (s_sntp_started) {
+        return;
+    }
+    s_sntp_started = true;
+    setenv("TZ", CONFIG_AIW_TZ, 1);
+    tzset();
+
+    esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(CONFIG_AIW_SNTP_SERVER);
+    cfg.sync_cb = sntp_sync_handler;
+    cfg.start = true;
+    esp_err_t e = esp_netif_sntp_init(&cfg);
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "SNTP init: %s", esp_err_to_name(e));
+    } else {
+        ESP_LOGI(TAG, "SNTP server=%s TZ=%s", CONFIG_AIW_SNTP_SERVER, CONFIG_AIW_TZ);
+    }
+}
+#endif
+
+static void http_time_sync_task(void *arg)
+{
+    (void)arg;
+    if (app_http_sync_time_from_server() == ESP_OK) {
+        s_time_synced = true;
+        fire_time_sync_cb();
+    }
+    vTaskDelete(NULL);
+}
+
+void app_wifi_set_time_sync_cb(app_wifi_time_sync_cb_t cb, void *user)
+{
+    s_time_sync_cb = cb;
+    s_time_sync_user = user;
+}
+
+bool app_wifi_time_synced(void)
+{
+    return s_time_synced;
+}
+
 static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
+    (void)arg;
+    (void)data;
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
@@ -29,11 +108,30 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
 
 static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
-    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+    (void)arg;
+    (void)base;
+    if (id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
         snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
         ESP_LOGI(TAG, "got ip: %s", s_ip);
         xEventGroupSetBits(s_wifi_evt, WIFI_CONNECTED_BIT);
+
+#if CONFIG_AIW_SNTP_ENABLE
+        if (s_sntp_started) {
+#if defined(AIW_HAVE_ESP_SNTP_RESTART)
+            esp_sntp_restart();
+#else
+            esp_netif_sntp_deinit();
+            s_sntp_started = false;
+            app_wifi_sntp_try_start();
+#endif
+        } else {
+            app_wifi_sntp_try_start();
+        }
+#endif
+        if (xTaskCreate(http_time_sync_task, "http_time", 8192, NULL, 4, NULL) != pdPASS) {
+            ESP_LOGW(TAG, "http_time task create failed");
+        }
     }
 }
 

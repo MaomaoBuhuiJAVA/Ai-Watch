@@ -1,8 +1,12 @@
 # Ai Watch overlay: ES8311 (board audio)
 CONFIG_CODEC_ES8311_SUPPORT=y
 
-# Tutorial UI uses lv_font_montserrat_18 on the on-screen keyboard
+# Tutorial UI uses lv_font_montserrat_18 on the on-screen keyboard（图标符号亦用此字体）
 CONFIG_LV_FONT_MONTSERRAT_18=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+# 语音对话页：环形进度（思考中）
+CONFIG_LV_USE_ARC=y
+CONFIG_LV_USE_SPINNER=y
 
 # 屏上中文对话（DeepSeek 回复）；默认字体也用中文，避免方块字
 CONFIG_LV_FONT_SIMSUN_16_CJK=y
@@ -18,6 +22,11 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-16MiB.csv"
 # Phone hotspot (menuconfig → Ai Watch to change)
 CONFIG_AIW_WIFI_SSID="iPhone"
 CONFIG_AIW_WIFI_PASSWORD="12345678"
+
+# 联网后 SNTP + HTTP(/api/time) 双路校时；默认中国 NTP 池 + 东八区
+CONFIG_AIW_SNTP_ENABLE=y
+CONFIG_AIW_SNTP_SERVER="cn.pool.ntp.org"
+CONFIG_AIW_TZ="CST-8"
 
 # 板载 NS4150 经 XL9555；若无声见 menuconfig → Ai Watch 反相项
 CONFIG_AIW_XL9555_SPK_HIGH_ENABLES_AMP=y

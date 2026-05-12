@@ -19,7 +19,13 @@ server/__pycache__/
 server/.env
 server/data/*.db
 server/data/wav/
+server/data/bundles/
+server/data/voice_tmp/
 *.pyc
+
+# Node / Vite 服务台
+node_modules/
+dist-desk/
 
 # IDE / OS
 .idea/
