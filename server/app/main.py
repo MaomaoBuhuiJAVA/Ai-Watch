@@ -19,6 +19,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import baidu_tts, db, stt, voice_stream
 from .deepseek_client import chat_completion
@@ -27,7 +28,23 @@ from .recording_service import enrich_recording_after_save, summarize_recording
 
 log = logging.getLogger(__name__)
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+_DASH_NO_CACHE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+}
+
+
+class DashboardNoCacheMiddleware(BaseHTTPMiddleware):
+    """避免浏览器长期缓存 Dashboard，导致仍加载旧的 index.html / JS chunk。"""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/dashboard"):
+            for k, v in _DASH_NO_CACHE.items():
+                response.headers[k] = v
+        return response
+
+
 DATA_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "data"))
 # main.py 在 server/app/，仓库根目录再上跳一级
 _REPO_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -56,13 +73,14 @@ def _ensure_desk_dist() -> None:
     except Exception as e:
         log.warning("自动构建 dist-desk 失败: %s", e)
 
-app = FastAPI(title="Ai Watch Server", version="0.1.0")
+app = FastAPI(title="智能手表 Server", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(DashboardNoCacheMiddleware)
 
 
 @app.on_event("startup")
@@ -82,6 +100,18 @@ async def _startup():
         log.warning(
             "DEEPSEEK_API_KEY is empty — /api/chat and /api/chat/from_wav return 503 until set in server/.env"
         )
+    try:
+        _listen_port = int((os.getenv("AIW_LISTEN_PORT") or "8765").strip())
+    except ValueError:
+        _listen_port = 8765
+    log.info(
+        "控制台 — Dashboard: http://127.0.0.1:%s/dashboard/ （手机/其它设备请把 127.0.0.1 换成本机局域网 IP）",
+        _listen_port,
+    )
+    _idx = os.path.join(DESK_UI_DIR, "index.html")
+    if os.path.isfile(_idx):
+        log.info("Dashboard 静态目录: %s", os.path.abspath(DESK_UI_DIR))
+        log.info("若界面仍是旧文案: 在仓库根目录执行 npm run desk:build 后重启本服务，并强制刷新浏览器 (Ctrl+F5)。")
 
 
 @app.get("/")
@@ -89,39 +119,30 @@ async def root(request: Request):
     accept = (request.headers.get("accept") or "").lower()
     desk_idx = os.path.join(DESK_UI_DIR, "index.html")
     if "text/html" in accept and os.path.isfile(desk_idx):
-        return RedirectResponse(url="/dashboard/", status_code=302)
+        return RedirectResponse(url="/dashboard/", status_code=302, headers=dict(_DASH_NO_CACHE))
     return PlainTextResponse(
-        "Ai Watch API\n"
-        "  GET  /dashboard/  (新版控制台 Dashboard，需先 npm run desk:build)\n"
+        "智能手表 API\n"
+        "  GET  /dashboard/  (控制台 Dashboard，需先 npm run desk:build)\n"
         "  GET  /health\n"
         "  GET  /api/time  (北京时间 Unix，供手表 HTTP 校时)\n"
-        "  GET  /desk  (旧版静态服务台)\n"
         "  POST /api/chat  (JSON: {\"message\":\"...\"})\n"
         "  POST /api/chat/from_wav  (body: WAV, 语音识别后对话)\n"
-        "  POST /api/voice_stream/start | .../chunk | .../finish(save_recording→desk) | .../chat\n"
+        "  POST /api/voice_stream/start | .../chunk | .../finish(save_recording→recordings) | .../chat\n"
         "  POST /api/tts  (JSON: {\"text\":\"...\"} → audio/wav，需百度密钥)\n"
         "  POST /api/recordings/upload  (body: WAV)\n"
         "  GET  /api/recordings  (含分类、转写路径、总结 JSON)\n"
         "  GET  /api/recordings/{id}/file?kind=wav|mp3|txt\n"
         "  GET  /api/recordings/{id}/export?format=docx|pdf\n"
         "  POST /api/recordings/{id}/summarize  (JSON 可选 prompt_card_slug)\n"
-        "  GET/POST/DELETE /api/prompt_cards  (提示词方案卡片)\n"
+        "  GET/POST/DELETE /api/prompt_cards  (智能体方案卡片)\n"
         "  GET  /docs  (Swagger)\n",
         media_type="text/plain; charset=utf-8",
     )
 
 
-@app.get("/desk")
-async def desk_page():
-    path = os.path.join(STATIC_DIR, "desk.html")
-    if not os.path.isfile(path):
-        return PlainTextResponse("desk.html missing", status_code=404)
-    return FileResponse(path, media_type="text/html; charset=utf-8")
-
-
 @app.get("/dashboard")
 async def dashboard_redirect():
-    return RedirectResponse(url="/dashboard/", status_code=307)
+    return RedirectResponse(url="/dashboard/", status_code=307, headers=dict(_DASH_NO_CACHE))
 
 
 @app.get("/dashboard/")
@@ -135,7 +156,11 @@ async def dashboard_spa():
             status_code=404,
             media_type="text/plain; charset=utf-8",
         )
-    return FileResponse(idx, media_type="text/html; charset=utf-8")
+    return FileResponse(
+        idx,
+        media_type="text/html; charset=utf-8",
+        headers=dict(_DASH_NO_CACHE),
+    )
 
 
 @app.get("/favicon.ico")

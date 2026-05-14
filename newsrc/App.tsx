@@ -202,7 +202,7 @@ function OverviewPanel() {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div className="glass-card rounded-3xl border border-white/5 p-8">
-        <h2 className="mb-2 text-xl font-black tracking-tight text-white">全局系统提示词</h2>
+        <h2 className="mb-2 text-xl font-black tracking-tight text-white">全局系统智能体</h2>
         <p className="mb-6 text-sm text-slate-500">手表端文本 / 语音对话默认 system，写入服务端 SQLite。</p>
         <textarea
           value={value}
@@ -233,7 +233,7 @@ function OverviewPanel() {
         <ul className="space-y-3 text-sm leading-relaxed text-slate-400">
           <li>录音上传后自动转写、同目录 TXT；本机有 ffmpeg 时生成 MP3。</li>
           <li>AI 分类：工作计划 / 语音复盘 / 其他。</li>
-          <li>在「音频金库」可选提示词卡片并生成总结（标题、要点高亮、报告）。</li>
+          <li>在「音频金库」可选智能体卡片并生成总结（标题、要点高亮、报告）。</li>
         </ul>
       </div>
     </div>
@@ -290,7 +290,7 @@ function PromptModal({
         <div className="flex items-center justify-between border-b border-white/5 p-8">
           <div>
             <h3 className="text-2xl font-black tracking-tight text-white">
-              {isNew ? "新建卡片" : "编辑提示词"}
+              {isNew ? "新建卡片" : "编辑智能体"}
             </h3>
             <p className="mt-1 text-xs font-medium text-slate-500">Slug 唯一；保存时同 slug 覆盖</p>
           </div>
@@ -1034,7 +1034,7 @@ function RecordingVault({ promptSlugs }: { promptSlugs: { slug: string; title: s
             </div>
           </div>
           <p className="text-sm text-slate-500">
-            转写与分类完成后，服务端会自动生成工作报告或复盘总结（无需点击）。打开详情后若仍在生成，列表会每几秒自动刷新。可选用下方提示词手动重新生成。
+            转写与分类完成后，服务端会自动生成工作报告或复盘总结（无需点击）。打开详情后若仍在生成，列表会每几秒自动刷新。可选用下方智能体手动重新生成。
           </p>
         </div>
         <div className="relative w-full lg:max-w-xs">
@@ -1171,7 +1171,7 @@ function RecordingVault({ promptSlugs }: { promptSlugs: { slug: string; title: s
                     )}
                   </div>
                   <div className="mt-4 shrink-0 space-y-2 border-t border-white/5 pt-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">选用提示词重新生成（可选）</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">选用智能体重新生成（可选）</p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                       <select
                         value={slug}

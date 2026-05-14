@@ -17,7 +17,10 @@ if (Test-Path ".\.venv\Scripts\python.exe") {
 }
 
 Write-Host "Using Python: $pythonExe" -ForegroundColor DarkGray
-Write-Host "Dashboard (React): http://<this-PC>:8765/dashboard/   |   Legacy: .../desk"
+$listenPort = 8765
+$env:AIW_LISTEN_PORT = "$listenPort"
+Write-Host "控制台 Dashboard: http://127.0.0.1:${listenPort}/dashboard/" -ForegroundColor Green
+Write-Host "(局域网访问时把 127.0.0.1 换成本机 IP；启动后 uvicorn 日志里会再打印一遍路径。)" -ForegroundColor DarkGray
 Write-Host "AI: set DEEPSEEK_API_KEY in server/.env (https://platform.deepseek.com) or voice/text replies return 503"
 Write-Host "Voice: set BAIDU_API_KEY + BAIDU_SECRET_KEY in .env for Baidu ASR (no HuggingFace); else faster-whisper"
 Write-Host "Firmware menuconfig: CONFIG_AIW_SERVER_BASE_URL e.g. http://192.168.1.5:8765"
@@ -49,4 +52,4 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-& $pythonExe -m uvicorn app.main:app --host 0.0.0.0 --port 8765
+& $pythonExe -m uvicorn app.main:app --host 0.0.0.0 --port $listenPort

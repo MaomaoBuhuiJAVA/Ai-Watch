@@ -27,7 +27,6 @@ if (-not (Test-Path -LiteralPath $deskIndex)) {
 
 $dashUrl = "http://127.0.0.1:8765/dashboard/"
 Write-Host ">>> Dashboard: $dashUrl" -ForegroundColor Green
-Write-Host ">>> Legacy desk: /desk | Browser opens in ~5s after server starts." -ForegroundColor DarkGray
 
 $null = Start-Job -ScriptBlock {
     Start-Sleep -Seconds 5

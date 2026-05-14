@@ -94,10 +94,10 @@
 - 固件用 **cJSON** 解析；HTTP **120s** 超时（`app_http.c`）。  
 - **NVS `privacy`** 打开时不发往云端（与旧「仅上传 WAV」一致）。
 
-## 10. 服务端「服务台」
+## 10. 服务端控制台
 
-- 浏览器访问：**`http://<跑 uvicorn 的电脑 IP>:8765/desk`**（本机可用 `http://127.0.0.1:8765/desk`）。  
-- 固件 **`CONFIG_AIW_SERVER_BASE_URL`** 应为 **`http://IP:8765`**（**不要**带 `/desk`）。  
+- 浏览器访问：**`http://<跑 uvicorn 的电脑 IP>:8765/dashboard/`**（本机可用 `http://127.0.0.1:8765/dashboard/`）。  
+- 固件 **`CONFIG_AIW_SERVER_BASE_URL`** 应为 **`http://IP:8765`**（**不要**带 `/dashboard/`）。  
 - 录音 WAV 保存目录：`server/data/wav/`（具体以 `main.py` 为准）。
 
 ---
