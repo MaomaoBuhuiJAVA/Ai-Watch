@@ -106,9 +106,10 @@
 
 ### 上电时固件在做什么
 
-1. **若 NVS 里已有 `wifi_ssid`**：只按 NVS 里的账号连该 WiFi（不再用 menuconfig 里默认的 iPhone 等）。
-2. **若 NVS 里没有保存过 WiFi**：先用 menuconfig / `sdkconfig.defaults` 里的 **`CONFIG_AIW_WIFI_SSID` / `CONFIG_AIW_WIFI_PASSWORD`** 试连一次，**最长等 60 秒**。
-3. **若仍连不上**：进入 **配网模式**：开发板自己开一个 **WiFi 热点（SoftAP）**，此时 **屏幕还不会进 LVGL 主界面**（配网成功重启后才会正常进表盘/对话）。
+1. **若 NVS 里已有 `wifi_ssid`**：只按 NVS 里的账号连该 WiFi。
+2. **若 NVS 里没有保存过 WiFi**：  
+   - **`CONFIG_AIW_MENUCONFIG_WIFI_FALLBACK=n`（默认）**：**不再尝试** menuconfig 里的 `iPhone`，**直接**开 **`AiWatch-xxxx`** 热点，请用手机连热点后打开 **`http://192.168.4.1`** 填写你家 WiFi 与服务器地址（避免板子默默连上教程热点却访问不了公网）。  
+   - 若你在 **`idf.py menuconfig → Ai Watch`** 里勾选了 **「No NVS: try menuconfig WiFi before SoftAP」**，才会恢复旧逻辑：先按 **`CONFIG_AIW_WIFI_*`** 试连 **60 秒**，失败再 SoftAP。
 
 ### 配网热点长什么样
 
@@ -135,7 +136,7 @@
 
 任选其一即可：
 
-- **方法一（最干净）**：在工程目录执行 **`idf.py erase-flash`** 再 **`idf.py flash`**，会清掉整片 Flash（含 NVS），相当于恢复出厂；上电后若 NVS 无记录，会先用 menuconfig 默认 WiFi 试 60 秒，失败再进热点配网。
+- **方法一（最干净）**：在工程目录执行 **`idf.py erase-flash`** 再 **`idf.py flash`**，会清掉整片 Flash（含 NVS）。在默认 **`CONFIG_AIW_MENUCONFIG_WIFI_FALLBACK=n`** 时，上电后 **直接** 出现 **`AiWatch-xxxx`** 配网热点（不再先连 iPhone）；配网页保存后才会连你填的路由器/服务器。
 - **方法二（只清 WiFi 记录）**：仍用 **`erase-flash`** 或后续增加「串口命令擦除 `aiw` 里 `wifi_ssid`」；当前仓库未做菜单项擦除，实用上 **`erase-flash`** 最简单。
 - **方法三**：用 **esptool / idf.py** 只擦 NVS 分区（需你熟悉分区表 `partitions-16MiB.csv` 里 nvs 偏移，进阶用法）。
 

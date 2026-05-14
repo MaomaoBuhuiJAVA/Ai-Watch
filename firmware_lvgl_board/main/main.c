@@ -4,6 +4,9 @@
  */
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#ifndef CONFIG_AIW_MENUCONFIG_WIFI_FALLBACK
+#define CONFIG_AIW_MENUCONFIG_WIFI_FALLBACK 0
+#endif
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -41,11 +44,15 @@ void app_main(void)
     char pass[CRED_PASS_MAX];
     char url[CRED_URL_MAX];
     bool has_nvs = cred_load_all(ssid, sizeof ssid, pass, sizeof pass, url, sizeof url);
-    if (!has_nvs) {
+    if (!has_nvs && CONFIG_AIW_MENUCONFIG_WIFI_FALLBACK) {
         strncpy(ssid, CONFIG_AIW_WIFI_SSID, sizeof ssid - 1);
         ssid[sizeof ssid - 1] = '\0';
         strncpy(pass, CONFIG_AIW_WIFI_PASSWORD, sizeof pass - 1);
         pass[sizeof pass - 1] = '\0';
+    } else if (!has_nvs) {
+        ssid[0] = '\0';
+        pass[0] = '\0';
+        ESP_LOGI(TAG, "no NVS WiFi and menuconfig fallback disabled -> SoftAP provisioning");
     }
     app_http_set_base_url(url);
 
@@ -53,7 +60,7 @@ void app_main(void)
 
     bool sta_ok = false;
     if (ssid[0] != '\0') {
-        ESP_LOGI(TAG, "Wi-Fi: try STA (NVS saved=%s)", has_nvs ? "yes" : "no, menuconfig fallback)");
+        ESP_LOGI(TAG, "Wi-Fi: try STA (NVS saved=%s)", has_nvs ? "yes" : "menuconfig fallback");
         ESP_ERROR_CHECK(app_wifi_sta_set_and_start(ssid, pass));
         if (app_wifi_wait_connected(60000) == ESP_OK) {
             sta_ok = true;

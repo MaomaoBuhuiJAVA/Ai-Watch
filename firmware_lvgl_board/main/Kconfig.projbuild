@@ -12,6 +12,13 @@ menu "Ai Watch"
         help
             Wi-Fi password.
 
+    config AIW_MENUCONFIG_WIFI_FALLBACK
+        bool "No NVS: try menuconfig WiFi before SoftAP (60s)"
+        default n
+        help
+            If disabled (default): NVS 里没有保存过 wifi_ssid 时，不再尝试 menuconfig 里的 SSID，直接进入 AiWatch-xxxx 热点配网页（避免误连教程默认 iPhone 却无法访问公网）。
+            If enabled: 先按 CONFIG_AIW_WIFI_* 连 STA 最多 60 秒，失败再开 SoftAP。
+
     config AIW_SERVER_BASE_URL
         string "Backend base URL (no trailing slash)"
         default "http://222.186.32.214:8765"
