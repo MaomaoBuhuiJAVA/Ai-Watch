@@ -1,4 +1,5 @@
 #include "app_http.h"
+#include "app_cred.h"
 #include "sdkconfig.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -7,9 +8,36 @@
 
 static const char *TAG = "app_http";
 
+static char s_base_url[CRED_URL_MAX];
+
+static void safe_copy(char *dst, size_t sz, const char *src)
+{
+    if (!dst || sz == 0) {
+        return;
+    }
+    if (!src) {
+        src = "";
+    }
+    size_t n = strnlen(src, sz - 1);
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+void app_http_set_base_url(const char *url)
+{
+    if (!url || !url[0]) {
+        safe_copy(s_base_url, sizeof(s_base_url), CONFIG_AIW_SERVER_BASE_URL);
+        return;
+    }
+    safe_copy(s_base_url, sizeof(s_base_url), url);
+}
+
 const char *app_http_base_url(void)
 {
-    return CONFIG_AIW_SERVER_BASE_URL;
+    if (s_base_url[0] == '\0') {
+        safe_copy(s_base_url, sizeof(s_base_url), CONFIG_AIW_SERVER_BASE_URL);
+    }
+    return s_base_url;
 }
 
 static esp_err_t http_post_raw(const char *url, const char *content_type, const uint8_t *body, size_t body_len,
@@ -62,7 +90,7 @@ static esp_err_t http_post_raw(const char *url, const char *content_type, const 
 esp_err_t app_http_post_json(const char *path, const char *json_body, char *out, size_t out_len)
 {
     char url[256];
-    snprintf(url, sizeof(url), "%s%s", CONFIG_AIW_SERVER_BASE_URL, path);
+    snprintf(url, sizeof(url), "%s%s", app_http_base_url(), path);
     return http_post_raw(url, "application/json; charset=utf-8", (const uint8_t *)json_body,
                            json_body ? strlen(json_body) : 0, out, out_len);
 }
@@ -106,7 +134,7 @@ esp_err_t app_http_upload_wav_pcm(const uint8_t *pcm, size_t pcm_len, uint32_t s
     memcpy(buf + 44, pcm, pcm_len);
 
     char url[256];
-    snprintf(url, sizeof(url), "%s/api/recordings/upload", CONFIG_AIW_SERVER_BASE_URL);
+    snprintf(url, sizeof(url), "%s/api/recordings/upload", app_http_base_url());
 
     esp_err_t err = http_post_raw(url, "audio/wav", buf, total, NULL, 0);
     free(buf);

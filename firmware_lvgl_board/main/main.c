@@ -13,8 +13,12 @@
 #include "xl9555.h"
 #include "lvgl_demo.h"
 #include "spi.h"
+#include "app_cred.h"
 #include "app_wifi.h"
+#include "app_http.h"
+#include "app_prov.h"
 #include "app_audio_codec.h"
+#include <string.h>
 
 static const char *TAG = "main";
 
@@ -33,13 +37,41 @@ void app_main(void)
     ESP_ERROR_CHECK(xl9555_init());
     spi2_init();
 
-    ESP_LOGI(TAG, "Wi-Fi STA (SSID/password: menuconfig → Ai Watch, default iPhone / 12345678)");
-    ESP_ERROR_CHECK(app_wifi_init_sta());
-    if (app_wifi_wait_connected(120000) != ESP_OK) {
-        ESP_LOGE(TAG, "Wi-Fi failed — check hotspot name/password and 2.4 GHz");
-    } else {
-        ESP_LOGI(TAG, "Wi-Fi OK, IP: %s", app_wifi_ip_str());
+    char ssid[CRED_SSID_MAX];
+    char pass[CRED_PASS_MAX];
+    char url[CRED_URL_MAX];
+    bool has_nvs = cred_load_all(ssid, sizeof ssid, pass, sizeof pass, url, sizeof url);
+    if (!has_nvs) {
+        strncpy(ssid, CONFIG_AIW_WIFI_SSID, sizeof ssid - 1);
+        ssid[sizeof ssid - 1] = '\0';
+        strncpy(pass, CONFIG_AIW_WIFI_PASSWORD, sizeof pass - 1);
+        pass[sizeof pass - 1] = '\0';
     }
+    app_http_set_base_url(url);
+
+    ESP_ERROR_CHECK(app_wifi_system_init());
+
+    bool sta_ok = false;
+    if (ssid[0] != '\0') {
+        ESP_LOGI(TAG, "Wi-Fi: try STA (NVS saved=%s)", has_nvs ? "yes" : "no, menuconfig fallback)");
+        ESP_ERROR_CHECK(app_wifi_sta_set_and_start(ssid, pass));
+        if (app_wifi_wait_connected(60000) == ESP_OK) {
+            sta_ok = true;
+        } else {
+            ESP_LOGW(TAG, "STA failed or timeout -> enter provisioning SoftAP");
+        }
+    } else {
+        ESP_LOGW(TAG, "empty SSID -> provisioning SoftAP");
+    }
+
+    if (!sta_ok) {
+        ESP_ERROR_CHECK(app_wifi_stop());
+        ESP_ERROR_CHECK(app_wifi_ap_start_provisioning());
+        /* 阻塞：手机连热点后浏览器 http://192.168.4.1 配网，保存后重启 */
+        app_prov_http_server_start();
+    }
+
+    ESP_LOGI(TAG, "Wi-Fi OK, IP: %s", app_wifi_ip_str());
 
     /* 先 LVGL 显示 DMA 缓冲，再音频 PCM，避免内部堆耗尽 → lv_disp buf NULL → 重启 */
     lvgl_engine_init();

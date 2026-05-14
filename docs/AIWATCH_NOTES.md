@@ -100,6 +100,49 @@
 - 固件 **`CONFIG_AIW_SERVER_BASE_URL`** 应为 **`http://IP:8765`**（**不要**带 `/dashboard/`）。  
 - 录音 WAV 保存目录：`server/data/wav/`（具体以 `main.py` 为准）。
 
+## 10.1 WiFi 自主配网（`firmware_lvgl_board`，带屏手表工程）
+
+固件把 **WiFi 名称/密码** 和 **后端地址** 存在 Flash 的 **NVS** 里（命名空间 **`aiw`**，键名 **`wifi_ssid`**、**`wifi_pass`**、**`srv_url`**）。**`srv_url`** 形如 **`http://222.186.32.214:8765`**，**末尾不要加斜杠**。
+
+### 上电时固件在做什么
+
+1. **若 NVS 里已有 `wifi_ssid`**：只按 NVS 里的账号连该 WiFi（不再用 menuconfig 里默认的 iPhone 等）。
+2. **若 NVS 里没有保存过 WiFi**：先用 menuconfig / `sdkconfig.defaults` 里的 **`CONFIG_AIW_WIFI_SSID` / `CONFIG_AIW_WIFI_PASSWORD`** 试连一次，**最长等 60 秒**。
+3. **若仍连不上**：进入 **配网模式**：开发板自己开一个 **WiFi 热点（SoftAP）**，此时 **屏幕还不会进 LVGL 主界面**（配网成功重启后才会正常进表盘/对话）。
+
+### 配网热点长什么样
+
+- **热点名称（SSID）**：**`AiWatch-` + MAC 地址后 1 字节两位十六进制**（再 1 字节两位十六进制），例如 **`AiWatch-A1B2`**（以你板子实际串口打印为准）。
+- **热点密码**：**`menuconfig → Ai Watch → SoftAP password`**，默认 **`12345678`**（可在 Kconfig 里改 **`CONFIG_AIW_PROV_AP_PASSWORD`**）。
+
+串口里会出现类似：
+
+`Provisioning SoftAP: SSID="AiWatch-xxYY" password="12345678" open http://192.168.4.1`
+
+### 你（手机端）一步一步怎么操作
+
+1. **用另一台手机或电脑**打开 **WLAN**，在列表里找到 **`AiWatch-xxxx`** 这个名字的热点（与串口日志一致）。
+2. 输入密码（默认 **`12345678`**），**连接成功**。
+3. 打开手机浏览器（Chrome / Safari 均可），地址栏输入：**`http://192.168.4.1`**（必须是 **192.168.4.1**，不要用百度或别的搜索框当网址）。
+4. 页面打开后填写：
+   - **WiFi 名称**：你要让手表长期连接的路由器或手机热点名称（**必须是 2.4GHz**，纯 5GHz 的 SSID 手表往往搜不到或连不上）。
+   - **WiFi 密码**：该网络的密码。
+   - **服务器地址**：默认已填 **`http://222.186.32.214:8765`**；若你换了域名或端口，改成你的 **`http://公网IP或域名:端口`**，同样**不要末尾斜杠**。
+5. 点 **「保存并重启」**。开发板会 **重启**，自动用刚保存的账号去连你的路由器/热点；连上后才会跑 **LVGL、音频、对话** 等逻辑。
+6. 若重启后仍进不了主界面：看 **串口日志** 是否仍打印 **`STA failed` / `connect timeout`**，多半是 **SSID/密码错误**、**路由器只有 5GHz**、或 **路由器拒绝新设备**。
+
+### 只想「换 WiFi / 换服务器」——重新配网
+
+任选其一即可：
+
+- **方法一（最干净）**：在工程目录执行 **`idf.py erase-flash`** 再 **`idf.py flash`**，会清掉整片 Flash（含 NVS），相当于恢复出厂；上电后若 NVS 无记录，会先用 menuconfig 默认 WiFi 试 60 秒，失败再进热点配网。
+- **方法二（只清 WiFi 记录）**：仍用 **`erase-flash`** 或后续增加「串口命令擦除 `aiw` 里 `wifi_ssid`」；当前仓库未做菜单项擦除，实用上 **`erase-flash`** 最简单。
+- **方法三**：用 **esptool / idf.py** 只擦 NVS 分区（需你熟悉分区表 `partitions-16MiB.csv` 里 nvs 偏移，进阶用法）。
+
+### 与 `firmware/main`（无屏控制台版）的关系
+
+- **`firmware/main`** 里同样有一套 NVS + SoftAP + **`http://192.168.4.1`** 配网逻辑，与 **`firmware_lvgl_board`** 行为一致；你日常烧 **`firmware_lvgl_board`** 时以本节为准即可。
+
 ---
 
 ## 11. 串口自检日志（音频）

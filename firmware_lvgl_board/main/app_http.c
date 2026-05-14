@@ -1,4 +1,5 @@
 #include "app_http.h"
+#include "app_cred.h"
 #include "sdkconfig.h"
 #include "cJSON.h"
 #include "esp_http_client.h"
@@ -10,9 +11,36 @@
 
 static const char *TAG = "app_http";
 
+static char s_base_url[CRED_URL_MAX];
+
+static void safe_copy(char *dst, size_t sz, const char *src)
+{
+    if (!dst || sz == 0) {
+        return;
+    }
+    if (!src) {
+        src = "";
+    }
+    size_t n = strnlen(src, sz - 1);
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+void app_http_set_base_url(const char *url)
+{
+    if (!url || !url[0]) {
+        safe_copy(s_base_url, sizeof(s_base_url), CONFIG_AIW_SERVER_BASE_URL);
+        return;
+    }
+    safe_copy(s_base_url, sizeof(s_base_url), url);
+}
+
 const char *app_http_base_url(void)
 {
-    return CONFIG_AIW_SERVER_BASE_URL;
+    if (s_base_url[0] == '\0') {
+        safe_copy(s_base_url, sizeof(s_base_url), CONFIG_AIW_SERVER_BASE_URL);
+    }
+    return s_base_url;
 }
 
 /**
@@ -143,7 +171,7 @@ static esp_err_t http_post_raw(const char *url, const char *content_type, const 
 esp_err_t app_http_post_json(const char *path, const char *json_body, char *out, size_t out_len)
 {
     char url[256];
-    snprintf(url, sizeof(url), "%s%s", CONFIG_AIW_SERVER_BASE_URL, path);
+    snprintf(url, sizeof(url), "%s%s", app_http_base_url(), path);
     return http_post_raw(url, "application/json; charset=utf-8", (const uint8_t *)json_body,
                            json_body ? strlen(json_body) : 0, out, out_len);
 }
@@ -182,7 +210,7 @@ esp_err_t app_http_upload_wav_pcm(const uint8_t *pcm, size_t pcm_len, uint32_t s
     build_wav_header(hdr, (uint32_t)pcm_len, sample_rate_hz);
 
     char url[256];
-    snprintf(url, sizeof(url), "%s/api/recordings/upload", CONFIG_AIW_SERVER_BASE_URL);
+    snprintf(url, sizeof(url), "%s/api/recordings/upload", app_http_base_url());
 
     esp_err_t err = http_post_hdr_then_data(url, "audio/wav", hdr, sizeof(hdr), pcm, pcm_len, NULL, 0, 60000);
     if (err == ESP_OK) {
@@ -201,7 +229,7 @@ esp_err_t app_http_post_pcm_voice_chat(const uint8_t *pcm, size_t pcm_len, uint3
     build_wav_header(hdr, (uint32_t)pcm_len, sample_rate_hz);
 
     char url[256];
-    snprintf(url, sizeof(url), "%s/api/chat/from_wav", CONFIG_AIW_SERVER_BASE_URL);
+    snprintf(url, sizeof(url), "%s/api/chat/from_wav", app_http_base_url());
     /* STT + DeepSeek 可能较慢 */
     return http_post_hdr_then_data(url, "audio/wav", hdr, sizeof(hdr), pcm, pcm_len, json_out, json_out_len,
                                    120000);
@@ -238,7 +266,7 @@ esp_err_t app_http_voice_stream_chunk(const char *session_id, const uint8_t *pcm
         return ESP_ERR_INVALID_ARG;
     }
     char url[224];
-    snprintf(url, sizeof(url), "%s/api/voice_stream/%s/chunk", CONFIG_AIW_SERVER_BASE_URL, session_id);
+    snprintf(url, sizeof(url), "%s/api/voice_stream/%s/chunk", app_http_base_url(), session_id);
     char drain[96];
     return http_post_raw(url, "application/octet-stream", pcm, pcm_len, drain, sizeof(drain));
 }
@@ -292,7 +320,7 @@ esp_err_t app_http_fetch_tts_wav(const char *utf8_text, uint8_t **wav_out, size_
     }
 
     char url[256];
-    snprintf(url, sizeof(url), "%s/api/tts", CONFIG_AIW_SERVER_BASE_URL);
+    snprintf(url, sizeof(url), "%s/api/tts", app_http_base_url());
 
     esp_http_client_config_t cfg = {
         .url = url,
@@ -443,7 +471,7 @@ static esp_err_t http_get_to_buf(const char *url, char *resp_out, size_t resp_ou
 esp_err_t app_http_sync_time_from_server(void)
 {
     char url[256];
-    snprintf(url, sizeof(url), "%s/api/time", CONFIG_AIW_SERVER_BASE_URL);
+    snprintf(url, sizeof(url), "%s/api/time", app_http_base_url());
 
     char buf[384];
     esp_err_t err = http_get_to_buf(url, buf, sizeof(buf), 8000);

@@ -14,9 +14,15 @@ menu "Ai Watch"
 
     config AIW_SERVER_BASE_URL
         string "Backend base URL (no trailing slash)"
-        default "http://172.20.10.4:8765"
+        default "http://222.186.32.214:8765"
         help
-            Local FastAPI server URL.
+            FastAPI 服务地址。配网网页可覆盖并写入 NVS（srv_url）。
+
+    config AIW_PROV_AP_PASSWORD
+        string "SoftAP password (provisioning mode)"
+        default "12345678"
+        help
+            开发板开热点配网时，手机连 AiWatch-xxxx 使用的 WPA2 密码。
 
     config AIW_DEVICE_NAME
         string "Device display name"

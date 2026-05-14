@@ -1,8 +1,10 @@
 idf_component_register(
     SRCS
         "app_main.c"
+        "app_cred.c"
         "app_wifi.c"
         "app_http.c"
+        "app_prov.c"
         "app_audio_codec.c"
         "app_console.c"
     INCLUDE_DIRS
@@ -13,6 +15,7 @@ idf_component_register(
         esp_netif
         esp_event
         esp_http_client
+        esp_http_server
         json
         driver
         esp_timer

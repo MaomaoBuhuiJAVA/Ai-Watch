@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 const char *app_http_base_url(void);
+void app_http_set_base_url(const char *url);
 
 /**
  * GET /api/time（服务端按北京时间返回 unix 秒），成功则 settimeofday 并返回 ESP_OK。
