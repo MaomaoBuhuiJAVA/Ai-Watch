@@ -144,7 +144,7 @@ function GlassHeader({
 function DeckTabs({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   const tabs: { id: TabId; label: string; icon: typeof Sparkles }[] = [
     { id: "overview", label: "总览", icon: LayoutDashboard },
-    { id: "prompts", label: "提示词研究室", icon: Sparkles },
+    { id: "prompts", label: "智能体研究所", icon: Sparkles },
     { id: "chat", label: "对话档案", icon: MessageSquare },
     { id: "recordings", label: "音频金库", icon: Mic },
   ];
@@ -406,7 +406,7 @@ function PromptStudio({ onCardsChange }: { onCardsChange?: () => void }) {
             <Sparkles className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-black tracking-tight text-white">提示词研究室</h2>
+            <h2 className="text-2xl font-black tracking-tight text-white">智能体研究所</h2>
             <p className="text-sm text-slate-500">物理卡片 · 弹出层编辑 · 对接 /api/prompt_cards</p>
           </div>
         </div>
@@ -1291,9 +1291,9 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               className="glow-text mb-2 text-4xl font-black tracking-tighter text-white"
             >
-              Ai Watch <span className="font-light text-white/35">服务台</span>
+              智能手表 <span className="font-light text-white/35">服务台</span>
             </motion.h1>
-            <p className="font-medium tracking-wide text-slate-500">极致暗色 · 玻璃拟态 · 与 FastAPI 后端实时联动</p>
+            <p className="font-medium tracking-wide text-slate-500">与 FastAPI 后端实时联动</p>
           </div>
           <DeckTabs active={tab} onChange={setTab} />
         </div>
@@ -1352,7 +1352,7 @@ export default function App() {
         <button type="button" onClick={() => void refresh()} className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand">
           刷新服务状态
         </button>
-        <p>Ai Watch · React 服务台</p>
+        <p>智能手表 · React 服务台</p>
       </footer>
     </div>
   );

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run desk:build",
+  "outputDirectory": "dist-desk",
+  "installCommand": "npm install"
+}

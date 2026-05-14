@@ -5,7 +5,7 @@ from typing import Optional
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "ai_watch.db")
 
 DEFAULT_CHAT_SYSTEM = (
-    "你是 Ai Watch 智能助理，回答简洁，可中文。"
+    "你是 智能手表 智能助理，回答简洁，可中文。"
     "用户通过手表语音或文字与你对话；不要编造未发生的录音内容。"
 )
 

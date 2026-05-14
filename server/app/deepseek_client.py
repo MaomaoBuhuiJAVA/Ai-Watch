@@ -16,7 +16,7 @@ async def chat_completion(user_text: str, system_prompt: Optional[str] = None) -
     base = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
     model = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip() or "deepseek-chat"
     system_prompt = system_prompt or (
-        "你是 Ai Watch 智能助理，回答简洁，可中文。"
+        "你是 智能手表 智能助理，回答简洁，可中文。"
         "用户设备用于日程、录音复盘与隐私控制；不要编造未发生的录音内容。"
     )
     url = f"{base}/v1/chat/completions"
